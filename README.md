@@ -1,45 +1,75 @@
 # Reddit Feed Organizer
 
-A lightweight Tampermonkey userscript that adds three filtering tabs to Reddit:
+<p align="center">
+  <img src="assets/reddit-feed-organizer-preview.jpg" alt="Reddit Feed Organizer showing All Posts, SFW and NSFW tabs" width="794">
+</p>
 
-- **All Posts** — show all detected posts.
-- **SFW** — show posts not detected as NSFW. This is the default view.
-- **NSFW** — show posts flagged as NSFW.
+<p align="center">
+  <strong>A calmer, more controlled way to browse Reddit.</strong><br>
+  Keep your everyday feed comfortable when you're browsing in public, at work, around family, or simply in an environment where you want to avoid unexpected NSFW posts.
+</p>
 
-The script targets Reddit's modern interface and includes basic selectors for Old Reddit.
+<p align="center">
+  <a href="src/reddit-feed-organizer.user.js"><img alt="Version 1.1.1" src="https://img.shields.io/badge/version-1.1.1-orange"></a>
+  <img alt="Tampermonkey" src="https://img.shields.io/badge/Tampermonkey-userscript-00485B">
+  <img alt="No API" src="https://img.shields.io/badge/API-not%20required-brightgreen">
+  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-blue"></a>
+</p>
 
-## Installation
+---
 
-1. Install [Tampermonkey](https://www.tampermonkey.net/) in your browser.
-2. Open [the userscript source](src/reddit-feed-organizer.user.js).
-3. Select **Raw** on GitHub and install/copy the script into Tampermonkey.
-4. Alternatively, download the `.user.js` file and open it in your browser.
-5. Save the script in Tampermonkey and reload Reddit.
+## Why use it?
+
+Reddit mixes content from many communities into one feed. Even if you enjoy browsing Reddit, an unexpected NSFW post can be awkward when you're using your computer in a shared or public space.
+
+**Reddit Feed Organizer** adds a small set of tabs directly above your feed, so you can choose what appears:
+
+- Browse **SFW posts by default** for a more comfortable everyday experience.
+- Switch to **All Posts** whenever you want the unfiltered feed.
+- Open the **NSFW** tab when you intentionally want to view posts Reddit identifies as NSFW.
+
+It is designed for people who want a simple, quick way to keep their Reddit browsing more suitable for the environment they're in — whether that's an office, a shared room, a public place, or home.
+
+> **A practical note:** This is a client-side convenience filter, not a guarantee of workplace-safe content. It can only identify posts that Reddit exposes as NSFW (plus a basic flair fallback). Unflagged content may still be unsuitable for a particular setting.
+
+## The interface
+
+The organizer sits above the Reddit feed and shows live counts for posts it has detected.
+
+<p align="center">
+  <img src="assets/reddit-feed-organizer-preview.jpg" alt="Screenshot of the Reddit Feed Organizer tabs and post counts" width="794">
+</p>
+
+| Tab | What it shows |
+| --- | --- |
+| **All Posts** | Every detected post, including NSFW-flagged posts |
+| **SFW** | Posts not detected as NSFW — selected automatically when the page loads |
+| **NSFW** | Posts detected as NSFW |
 
 ## Features
 
-- Three tabs: All Posts, SFW and NSFW.
-- SFW is selected by default.
-- Counters for detected posts in each category.
-- Detects posts added through Reddit's dynamic feed.
-- Caches post classifications to avoid repeated NSFW checks.
-- No Reddit API credentials, external libraries or network requests.
+- **SFW by default** — the safer browsing view is selected automatically.
+- **Three simple tabs** — All Posts, SFW and NSFW. No custom tab setup required.
+- **Post counters** — see how many detected posts belong to each category.
+- **Dynamic feed support** — newly loaded posts are processed as Reddit adds them.
+- **Lightweight processing** — classifications are cached, and the script processes added/removed post subtrees instead of repeatedly rescanning the entire page.
+- **No API credentials** — no Reddit API key, external library, or external service is needed.
 
-## Performance
+## Install
 
-The script observes DOM additions and removals to detect posts loaded by Reddit. It inspects newly added subtrees instead of rescanning the entire page for every DOM mutation. Post classifications are cached in a `WeakMap`.
+1. Install [Tampermonkey](https://www.tampermonkey.net/) in your browser.
+2. Open the [userscript file](src/reddit-feed-organizer.user.js) in this repository.
+3. Click **Raw** and install it through Tampermonkey, or copy the source into a new Tampermonkey script.
+4. Save the script and refresh Reddit.
 
-## Limitations
-
-- Only posts currently present in the page are filtered; the script does not fetch more posts.
-- NSFW detection relies primarily on Reddit's post attributes, with flair indicators as a fallback.
-- Reddit may change its DOM structure. If post detection stops working after a Reddit interface update, selectors may need maintenance.
-- This script does not change Reddit account settings or server-side NSFW preferences.
-- This is a client-side visibility filter, not a content moderation or access-control mechanism.
+**Supported Reddit addresses:**
+- `www.reddit.com`
+- `old.reddit.com`
+- `new.reddit.com`
 
 ## Configuration
 
-At the top of the userscript:
+The settings are at the top of the userscript:
 
 ```javascript
 const CONFIG = {
@@ -49,16 +79,35 @@ const CONFIG = {
 };
 ```
 
-- `defaultTab`: `all`, `sfw` or `nsfw`.
-- `showCounts`: display the number of detected posts in each tab.
-- `sticky`: keep the tab bar sticky while scrolling.
+| Option | Description |
+| --- | --- |
+| `defaultTab` | Initial tab: `all`, `sfw` or `nsfw` |
+| `showCounts` | Show detected-post counts on the tabs |
+| `sticky` | Keep the tab bar sticky while scrolling |
 
-## Supported URL patterns
+## Performance approach
 
-- `https://www.reddit.com/*`
-- `https://old.reddit.com/*`
-- `https://new.reddit.com/*`
+The script uses a `MutationObserver` to notice when Reddit adds or removes feed content. It then:
+
+1. Inspects only the newly added or removed subtree.
+2. Caches each post's NSFW classification in a `WeakMap`.
+3. Updates counters incrementally.
+4. Changes post visibility only when a new post appears or the selected tab changes.
+
+This avoids the previous approach of rescanning every post after unrelated page mutations.
+
+## Known limitations
+
+- The script filters posts that Reddit has already loaded; it does not fetch additional posts.
+- NSFW detection relies on Reddit's post attributes, with flair detection as a fallback.
+- Reddit can change its page structure at any time, which may require selector updates.
+- This script does not change Reddit account settings or server-side content preferences.
+- Content that is not correctly flagged by Reddit may remain visible in the SFW tab.
+
+## Contributing and feedback
+
+Bug reports, compatibility notes and improvement suggestions are welcome. If Reddit changes its interface and the tabs stop working, please open an issue with the Reddit page type (Home feed or subreddit) and browser details.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+Released under the [MIT License](LICENSE).
