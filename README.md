@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="src/reddit-feed-organizer.user.js"><img alt="Version 1.1.3" src="https://img.shields.io/badge/version-1.1.3-orange"></a>
+  <a href="src/reddit-feed-organizer.user.js"><img alt="Version 1.1.4" src="https://img.shields.io/badge/version-1.1.4-orange"></a>
   <img alt="Tampermonkey" src="https://img.shields.io/badge/Tampermonkey-userscript-00485B">
   <img alt="No API" src="https://img.shields.io/badge/API-not%20required-brightgreen">
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-blue"></a>
@@ -49,6 +49,7 @@ The organizer sits above the Reddit feed and shows live counts for posts it has 
 - **Post counters** — see how many detected posts belong to each category.
 - **Dynamic feed support** — newly loaded posts are processed as Reddit adds them.
 - **Feed-only operation** — the organizer is disabled on individual post pages and other non-feed pages.
+- **Reliable navigation recovery** — returning to the home feed with Reddit's logo, navigating between subreddits, and browser Back/Forward are handled.
 - **Lightweight processing** — classifications are cached, and the script processes added/removed post subtrees instead of repeatedly rescanning the entire page.
 - **No API credentials** — no Reddit API key, external library, or external service is needed.
 
@@ -84,7 +85,7 @@ const CONFIG = {
 
 ## Performance approach
 
-The script runs only on supported feed-listing routes. Individual post pages (URLs containing `/comments/`) are explicitly excluded. Reddit's client-side navigation is monitored so the organizer is stopped and its filtering styles are cleaned up when navigating into a post, then re-enabled when returning to a feed. On feed pages, a `MutationObserver` notices when Reddit adds or removes feed content. It then:
+The script runs only on supported feed-listing routes. Individual post pages (URLs containing `/comments/`) are explicitly excluded. Reddit's client-side navigation is monitored through URL changes, internal-link clicks, History API events, and browser navigation events. The organizer is stopped and its filtering styles are cleaned up when navigating into a post, then re-enabled when a feed container has actually rendered. Feed-to-feed navigation also resets stale post references and counters before initializing the new feed. On feed pages, a `MutationObserver` notices when Reddit adds or removes feed content. It then:
 
 1. Inspects only the newly added or removed subtree.
 2. Caches each post's NSFW classification in a `WeakMap`.

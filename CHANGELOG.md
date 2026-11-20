@@ -2,6 +2,20 @@
 
 All notable project changes are documented here.
 
+## [1.1.4] - 2026-11-20
+
+### Fixed
+- Fixed reinitialization when returning to Reddit's home feed using the top-left Reddit logo.
+- Added internal-link click and Navigation API handling as fallbacks to History API hooks, including from individual post pages where the feed observer is stopped.
+- Reset feed state, counters, toolbar and hidden-post classes on every route change, including subreddit-to-home and subreddit-to-subreddit navigation.
+- Wait for an actual Reddit feed container before injecting the toolbar, avoiding injection into stale post-detail layouts during transitions.
+- Observe the document element so the active observer remains connected when Reddit replaces body content.
+
+### Notes
+- SFW remains the default tab after entering a feed.
+- Individual post pages remain excluded.
+- No external dependencies or Reddit API credentials required.
+
 ## [1.1.3] - 2026-11-20
 
 ### Fixed

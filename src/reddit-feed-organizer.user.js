@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Reddit Feed Organizer - Lightweight
 // @namespace    https://github.com/Danikika94/reddit-feed-organizer
-// @version      1.1.3
+// @version      1.1.4
 // @description  Organize Reddit feed listings into All Posts, SFW and NSFW tabs. SFW is shown by default.
 // @author       Danikika94
 // @match        https://www.reddit.com/*
@@ -26,8 +26,10 @@
         'shreddit-post, article[data-testid="post-container"], .thing.link';
 
     let activeTab = CONFIG.defaultTab;
-    let observer = null;
+    let feedObserver = null;
+    let pendingFeedObserver = null;
     let isRunning = false;
+    let lastRouteKey = getRouteKey();
 
     const classifications = new WeakMap();
     const activePosts = new Map();
@@ -44,55 +46,63 @@
             /^\/(?:search|best|hot|new|top|popular|all)(?:\/|$)/i.test(path);
     }
 
+    function getRouteKey() {
+        return window.location.pathname + window.location.search + window.location.hash;
+    }
+
+    // Prefer Reddit's actual feed containers. Avoid using a generic <main>
+    // element, which can belong to an individual post page during navigation.
+    function findFeedRoot() {
+        const modernFeed = document.querySelector('shreddit-feed');
+        if (modernFeed) return modernFeed;
+
+        const oldFeed = document.querySelector('#siteTable, .sitetable.linklisting');
+        if (oldFeed && oldFeed.querySelector(POST_SELECTOR)) return oldFeed;
+
+        const testIdFeed = document.querySelector('[data-testid="posts-list"]');
+        if (testIdFeed && testIdFeed.querySelector(POST_SELECTOR)) return testIdFeed;
+
+        // Fallback for Reddit layouts without a named feed wrapper.
+        // Requiring multiple posts helps avoid mistaking a stale post-detail
+        // layout for the destination feed during client-side navigation.
+        const main = document.querySelector('main');
+        if (main && main.querySelectorAll(POST_SELECTOR).length > 1) return main;
+
+        return null;
+    }
+
     function addStyles() {
         if (document.getElementById(STYLE_ID)) return;
 
         const style = document.createElement('style');
         style.id = STYLE_ID;
-        style.textContent = `
-            #${TOOLBAR_ID} {
-                display: flex;
-                align-items: center;
-                flex-wrap: wrap;
-                gap: 8px;
-                padding: 12px 16px;
-                margin: 12px auto;
-                max-width: 1100px;
-                background: var(--color-neutral-background, #1a1a1b);
-                border: 1px solid var(--color-neutral-border, #343536);
-                border-radius: 12px;
-                z-index: 100;
-            }
-            #${TOOLBAR_ID}.rfo-sticky { position: sticky; top: 60px; }
-            #${TOOLBAR_ID} .rfo-label { font-weight: 700; margin-right: 10px; }
-            #${TOOLBAR_ID} button {
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                vertical-align: middle;
-                box-sizing: border-box;
-                line-height: 1;
-                cursor: pointer;
-                padding: 9px 18px;
-                border-radius: 20px;
-                border: 1px solid var(--color-neutral-border, #555);
-                background: transparent;
-                color: var(--color-neutral-content, inherit);
-                font-size: 14px;
-                font-weight: 600;
-                text-align: center;
-            }
-            #${TOOLBAR_ID} button .rfo-count {
-                display: inline-flex;
-                align-items: center;
-                line-height: 1;
-            }
-            #${TOOLBAR_ID} button.active {
-                background: #d93900; color: white; border-color: #d93900;
-            }
-            #${TOOLBAR_ID} .rfo-count { margin-left: 5px; opacity: 0.8; }
-            .rfo-hidden { display: none !important; }
-        `;
+        style.textContent = [
+            '#reddit-feed-organizer {',
+            '  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;',
+            '  padding: 12px 16px; margin: 12px auto; max-width: 1100px;',
+            '  background: var(--color-neutral-background, #1a1a1b);',
+            '  border: 1px solid var(--color-neutral-border, #343536);',
+            '  border-radius: 12px; z-index: 100;',
+            '}',
+            '#reddit-feed-organizer.rfo-sticky { position: sticky; top: 60px; }',
+            '#reddit-feed-organizer .rfo-label { font-weight: 700; margin-right: 10px; }',
+            '#reddit-feed-organizer button {',
+            '  display: inline-flex; align-items: center; justify-content: center;',
+            '  vertical-align: middle; box-sizing: border-box; line-height: 1;',
+            '  cursor: pointer; padding: 9px 18px; border-radius: 20px;',
+            '  border: 1px solid var(--color-neutral-border, #555);',
+            '  background: transparent; color: var(--color-neutral-content, inherit);',
+            '  font-size: 14px; font-weight: 600; text-align: center;',
+            '}',
+            '#reddit-feed-organizer button .rfo-count {',
+            '  display: inline-flex; align-items: center; line-height: 1;',
+            '}',
+            '#reddit-feed-organizer button.active {',
+            '  background: #d93900; color: white; border-color: #d93900;',
+            '}',
+            '#reddit-feed-organizer .rfo-count { margin-left: 5px; opacity: 0.8; }',
+            '.rfo-hidden { display: none !important; }'
+        ].join('\n');
 
         document.head.appendChild(style);
     }
@@ -101,9 +111,10 @@
         const found = new Set();
 
         if (
-            root.nodeType !== Node.ELEMENT_NODE &&
-            root.nodeType !== Node.DOCUMENT_NODE &&
-            root.nodeType !== Node.DOCUMENT_FRAGMENT_NODE
+            !root ||
+            (root.nodeType !== Node.ELEMENT_NODE &&
+             root.nodeType !== Node.DOCUMENT_NODE &&
+             root.nodeType !== Node.DOCUMENT_FRAGMENT_NODE)
         ) return found;
 
         if (root.nodeType === Node.ELEMENT_NODE && root.matches(POST_SELECTOR)) {
@@ -188,7 +199,7 @@
         if (!toolbar) return;
 
         toolbar.querySelectorAll('[data-count]').forEach(element => {
-            element.textContent = `(${counts[element.dataset.count]})`;
+            element.textContent = '(' + counts[element.dataset.count] + ')';
         });
 
         toolbar.querySelectorAll('button[data-tab]').forEach(button => {
@@ -197,13 +208,11 @@
     }
 
     function createToolbar() {
-        if (document.getElementById(TOOLBAR_ID)) return true;
+        const existing = document.getElementById(TOOLBAR_ID);
+        if (existing) return true;
 
-        const feed = document.querySelector('shreddit-feed') ||
-                     document.querySelector('main');
-
-        // Do not inject the toolbar into arbitrary pages or the document body.
-        if (!feed || !feed.parentNode) return false;
+        const feed = findFeedRoot();
+        if (!feed) return false;
 
         const toolbar = document.createElement('div');
         toolbar.id = TOOLBAR_ID;
@@ -241,7 +250,15 @@
             toolbar.appendChild(button);
         });
 
-        feed.parentNode.insertBefore(toolbar, feed);
+        if (feed.tagName === 'SHREDDIT-FEED' ||
+            feed.id === 'siteTable' ||
+            feed.classList.contains('sitetable') ||
+            feed.dataset.testid === 'posts-list') {
+            feed.parentNode.insertBefore(toolbar, feed);
+        } else {
+            feed.insertBefore(toolbar, feed.firstChild);
+        }
+
         updateCounts();
         return true;
     }
@@ -252,12 +269,22 @@
         counts.nsfw = 0;
     }
 
-    function stopOnNonFeedPage() {
-        if (observer) {
-            observer.disconnect();
-            observer = null;
+    function disconnectPendingFeedObserver() {
+        if (pendingFeedObserver) {
+            pendingFeedObserver.disconnect();
+            pendingFeedObserver = null;
+        }
+    }
+
+    function cleanupRuntime() {
+        if (feedObserver) {
+            feedObserver.disconnect();
+            feedObserver = null;
         }
 
+        disconnectPendingFeedObserver();
+
+        // Always restore posts before removing the filtering stylesheet.
         activePosts.forEach((_nsfw, post) => post.classList.remove('rfo-hidden'));
         activePosts.clear();
         resetCounts();
@@ -267,80 +294,182 @@
         isRunning = false;
     }
 
+    function processMutations(mutations) {
+        let changed = false;
+
+        for (const mutation of mutations) {
+            mutation.removedNodes.forEach(node => {
+                collectPosts(node).forEach(post => {
+                    removePost(post);
+                    changed = true;
+                });
+            });
+
+            mutation.addedNodes.forEach(node => {
+                collectPosts(node).forEach(post => {
+                    addPost(post);
+                    changed = true;
+                });
+            });
+        }
+
+        if (!document.getElementById(TOOLBAR_ID)) createToolbar();
+        if (changed) updateCounts();
+    }
+
     function startOnFeedPage() {
-        if (!isFeedPage()) {
-            stopOnNonFeedPage();
+        if (!isFeedPage() || isRunning) return isRunning;
+
+        const feed = findFeedRoot();
+        if (!feed) return false;
+
+        isRunning = true;
+        activeTab = CONFIG.defaultTab;
+        addStyles();
+
+        if (!createToolbar()) {
+            isRunning = false;
+            return false;
+        }
+
+        collectPosts(feed).forEach(addPost);
+        updateAllVisibility();
+        updateCounts();
+
+        feedObserver = new MutationObserver(mutations => {
+            // The URL may change before Reddit finishes replacing the feed DOM.
+            checkRouteChange();
+            if (!isFeedPage()) return;
+            if (!isRunning) {
+                waitForFeedAndStart();
+                return;
+            }
+            processMutations(mutations);
+        });
+
+        // Observe the document element rather than body so React/Reddit can
+        // replace the body subtree without disconnecting the observer.
+        feedObserver.observe(document.documentElement, {
+            childList: true,
+            subtree: true
+        });
+
+        return true;
+    }
+
+    function waitForFeedAndStart() {
+        if (!isFeedPage()) return;
+
+        if (startOnFeedPage()) {
+            disconnectPendingFeedObserver();
             return;
         }
 
-        if (!isRunning) {
-            isRunning = true;
-            activeTab = CONFIG.defaultTab;
-            addStyles();
-            createToolbar();
+        if (pendingFeedObserver) return;
 
-            observer = new MutationObserver(mutations => {
-                if (!isFeedPage()) {
-                    stopOnNonFeedPage();
-                    return;
-                }
+        pendingFeedObserver = new MutationObserver(() => {
+            checkRouteChange();
+            if (!isFeedPage()) {
+                disconnectPendingFeedObserver();
+                return;
+            }
 
-                let changed = false;
+            if (startOnFeedPage()) disconnectPendingFeedObserver();
+        });
 
-                for (const mutation of mutations) {
-                    mutation.removedNodes.forEach(node => {
-                        collectPosts(node).forEach(post => {
-                            removePost(post);
-                            changed = true;
-                        });
-                    });
+        pendingFeedObserver.observe(document.documentElement, {
+            childList: true,
+            subtree: true
+        });
+    }
 
-                    mutation.addedNodes.forEach(node => {
-                        collectPosts(node).forEach(post => {
-                            addPost(post);
-                            changed = true;
-                        });
-                    });
-                }
+    function handleRouteChange() {
+        cleanupRuntime();
 
-                if (!document.getElementById(TOOLBAR_ID)) createToolbar();
-                if (changed) updateCounts();
-            });
+        if (isFeedPage()) {
+            waitForFeedAndStart();
+        }
+    }
 
-            observer.observe(document.body, {
-                childList: true,
-                subtree: true
-            });
-        } else {
-            createToolbar();
+    function checkRouteChange() {
+        const nextRouteKey = getRouteKey();
+
+        if (nextRouteKey !== lastRouteKey) {
+            lastRouteKey = nextRouteKey;
+            handleRouteChange();
+            return;
         }
 
-        collectPosts(document).forEach(addPost);
-        updateAllVisibility();
-        updateCounts();
+        // Allows a delayed Reddit feed render to initialize even when the URL
+        // was already updated before the destination DOM became available.
+        if (isFeedPage() && !isRunning) waitForFeedAndStart();
     }
 
-    // Reddit is a single-page app. Re-check the URL after client-side navigation.
-    function handleRouteChange() {
-        startOnFeedPage();
+    function scheduleRouteChecks() {
+        // Reddit may update the URL and render the destination at different
+        // moments. These few checks are only scheduled after navigation input.
+        [0, 80, 250, 650].forEach(delay => {
+            window.setTimeout(checkRouteChange, delay);
+        });
     }
 
-    const originalPushState = history.pushState;
-    history.pushState = function (...args) {
-        const result = originalPushState.apply(this, args);
-        Promise.resolve().then(handleRouteChange);
-        return result;
-    };
+    function onDocumentClick(event) {
+        const path = typeof event.composedPath === 'function'
+            ? event.composedPath()
+            : [event.target];
 
-    const originalReplaceState = history.replaceState;
-    history.replaceState = function (...args) {
-        const result = originalReplaceState.apply(this, args);
-        Promise.resolve().then(handleRouteChange);
-        return result;
-    };
+        let link = path.find(node =>
+            node instanceof HTMLAnchorElement && node.href
+        );
 
-    window.addEventListener('popstate', handleRouteChange);
-    window.addEventListener('hashchange', handleRouteChange);
+        if (!link && event.target instanceof Element) {
+            link = event.target.closest('a[href]');
+        }
 
-    startOnFeedPage();
+        if (!link) return;
+
+        try {
+            const destination = new URL(link.href, window.location.href);
+            if (destination.origin === window.location.origin) {
+                scheduleRouteChecks();
+            }
+        } catch (_error) {
+            // Ignore malformed or non-standard links.
+        }
+    }
+
+    // Supplement History API hooks with navigation and click detection.
+    // This is important on post pages, where the feed observer is not running.
+    function patchHistoryMethod(methodName) {
+        try {
+            const original = window.history[methodName];
+            if (typeof original !== 'function' || original.__rfoWrapped) return;
+
+            const wrapped = function () {
+                const result = original.apply(this, arguments);
+                scheduleRouteChecks();
+                return result;
+            };
+
+            Object.defineProperty(wrapped, '__rfoWrapped', { value: true });
+            window.history[methodName] = wrapped;
+        } catch (_error) {
+            // Click, Navigation API and popstate listeners remain as fallbacks.
+        }
+    }
+
+    patchHistoryMethod('pushState');
+    patchHistoryMethod('replaceState');
+
+    document.addEventListener('click', onDocumentClick, true);
+    window.addEventListener('popstate', scheduleRouteChecks);
+    window.addEventListener('hashchange', scheduleRouteChecks);
+    window.addEventListener('pageshow', scheduleRouteChecks);
+
+    if (window.navigation &&
+        typeof window.navigation.addEventListener === 'function') {
+        window.navigation.addEventListener('navigate', scheduleRouteChecks);
+    }
+
+    if (isFeedPage()) waitForFeedAndStart();
 })();
