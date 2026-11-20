@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Reddit Feed Organizer - Lightweight
 // @namespace    https://github.com/Danikika94/reddit-feed-organizer
-// @version      1.1.1
+// @version      1.1.2
 // @description  Organize Reddit feeds into All Posts, SFW and NSFW tabs. SFW is shown by default.
 // @author       Danikika94
 // @match        https://www.reddit.com/*
@@ -53,10 +53,26 @@
             #${TOOLBAR_ID}.rfo-sticky { position: sticky; top: 60px; }
             #${TOOLBAR_ID} .rfo-label { font-weight: 700; margin-right: 10px; }
             #${TOOLBAR_ID} button {
-                cursor: pointer; padding: 9px 18px; border-radius: 20px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                vertical-align: middle;
+                box-sizing: border-box;
+                line-height: 1;
+                cursor: pointer;
+                padding: 9px 18px;
+                border-radius: 20px;
                 border: 1px solid var(--color-neutral-border, #555);
-                background: transparent; color: var(--color-neutral-content, inherit);
-                font-size: 14px; font-weight: 600;
+                background: transparent;
+                color: var(--color-neutral-content, inherit);
+                font-size: 14px;
+                font-weight: 600;
+                text-align: center;
+            }
+            #${TOOLBAR_ID} button .rfo-count {
+                display: inline-flex;
+                align-items: center;
+                line-height: 1;
             }
             #${TOOLBAR_ID} button.active {
                 background: #d93900; color: white; border-color: #d93900;

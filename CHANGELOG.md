@@ -2,6 +2,15 @@
 
 All notable project changes are documented here.
 
+## [1.1.2] - 2026-11-20
+
+### Fixed
+- Vertically centered the text and post counters inside all organizer buttons.
+- Switched the tab buttons to inline-flex alignment so labels remain centered consistently.
+
+### Notes
+- No changes to feed filtering, post classification, or tab behavior.
+
 ## [1.1.1] - 2026-11-20
 
 ### Changed

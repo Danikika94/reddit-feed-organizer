@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="src/reddit-feed-organizer.user.js"><img alt="Version 1.1.1" src="https://img.shields.io/badge/version-1.1.1-orange"></a>
+  <a href="src/reddit-feed-organizer.user.js"><img alt="Version 1.1.2" src="https://img.shields.io/badge/version-1.1.2-orange"></a>
   <img alt="Tampermonkey" src="https://img.shields.io/badge/Tampermonkey-userscript-00485B">
   <img alt="No API" src="https://img.shields.io/badge/API-not%20required-brightgreen">
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-blue"></a>
