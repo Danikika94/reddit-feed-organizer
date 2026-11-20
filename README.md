@@ -1,7 +1,7 @@
 # Reddit Feed Organizer
 
 <p align="center">
-  <img src="assets/reddit-feed-organizer-preview.jpg" alt="Reddit Feed Organizer showing All Posts, SFW and NSFW tabs" width="794">
+  <img src="assets/reddit-feed-organizer-preview.png" alt="Reddit Feed Organizer showing All Posts, SFW and NSFW tabs" width="794">
 </p>
 
 <p align="center">
@@ -35,10 +35,6 @@ It is designed for people who want a simple, quick way to keep their Reddit brow
 ## The interface
 
 The organizer sits above the Reddit feed and shows live counts for posts it has detected.
-
-<p align="center">
-  <img src="assets/reddit-feed-organizer-preview.jpg" alt="Screenshot of the Reddit Feed Organizer tabs and post counts" width="794">
-</p>
 
 | Tab | What it shows |
 | --- | --- |
