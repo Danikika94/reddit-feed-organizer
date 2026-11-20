@@ -2,6 +2,18 @@
 
 All notable project changes are documented here.
 
+## [1.1.3] - 2026-11-20
+
+### Fixed
+- Disabled the organizer entirely on individual Reddit post pages (permalinks containing `/comments/`).
+- Restricted toolbar injection to supported feed-listing routes; no fallback injection into arbitrary page bodies.
+- Added handling for Reddit single-page navigation (`pushState`, `replaceState`, back/forward and hash changes).
+- Cleaned up the toolbar, styles and hidden-post classes when navigating away from a feed.
+
+### Notes
+- Feed filtering remains SFW by default.
+- No API credentials or external dependencies required.
+
 ## [1.1.2] - 2026-11-20
 
 ### Fixed

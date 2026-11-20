@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Reddit Feed Organizer - Lightweight
 // @namespace    https://github.com/Danikika94/reddit-feed-organizer
-// @version      1.1.2
-// @description  Organize Reddit feeds into All Posts, SFW and NSFW tabs. SFW is shown by default.
+// @version      1.1.3
+// @description  Organize Reddit feed listings into All Posts, SFW and NSFW tabs. SFW is shown by default.
 // @author       Danikika94
 // @match        https://www.reddit.com/*
 // @match        https://old.reddit.com/*
@@ -26,10 +26,23 @@
         'shreddit-post, article[data-testid="post-container"], .thing.link';
 
     let activeTab = CONFIG.defaultTab;
+    let observer = null;
+    let isRunning = false;
+
     const classifications = new WeakMap();
     const activePosts = new Map();
-
     const counts = { all: 0, sfw: 0, nsfw: 0 };
+
+    // Individual post pages must never be modified by this userscript.
+    function isFeedPage() {
+        const path = window.location.pathname;
+
+        if (/\/comments(?:\/|$)/i.test(path)) return false;
+
+        return path === '/' ||
+            /^\/(?:r|user|u)\/[^/]+(?:\/|$)/i.test(path) ||
+            /^\/(?:search|best|hot|new|top|popular|all)(?:\/|$)/i.test(path);
+    }
 
     function addStyles() {
         if (document.getElementById(STYLE_ID)) return;
@@ -184,7 +197,13 @@
     }
 
     function createToolbar() {
-        if (document.getElementById(TOOLBAR_ID)) return;
+        if (document.getElementById(TOOLBAR_ID)) return true;
+
+        const feed = document.querySelector('shreddit-feed') ||
+                     document.querySelector('main');
+
+        // Do not inject the toolbar into arbitrary pages or the document body.
+        if (!feed || !feed.parentNode) return false;
 
         const toolbar = document.createElement('div');
         toolbar.id = TOOLBAR_ID;
@@ -222,57 +241,106 @@
             toolbar.appendChild(button);
         });
 
-        const feed = document.querySelector('shreddit-feed') ||
-                     document.querySelector('main');
-
-        if (feed && feed.parentNode) feed.parentNode.insertBefore(toolbar, feed);
-        else document.body.prepend(toolbar);
-
+        feed.parentNode.insertBefore(toolbar, feed);
         updateCounts();
+        return true;
     }
 
-    function initialize() {
-        addStyles();
-        createToolbar();
-        collectPosts(document).forEach(addPost);
-        updateCounts();
+    function resetCounts() {
+        counts.all = 0;
+        counts.sfw = 0;
+        counts.nsfw = 0;
     }
 
-    // Observe child additions/removals only; ignore text and attribute mutations.
-    const observer = new MutationObserver(mutations => {
-        let changed = false;
-
-        for (const mutation of mutations) {
-            mutation.removedNodes.forEach(node => {
-                collectPosts(node).forEach(post => {
-                    removePost(post);
-                    changed = true;
-                });
-            });
-
-            mutation.addedNodes.forEach(node => {
-                collectPosts(node).forEach(post => {
-                    addPost(post);
-                    changed = true;
-                });
-            });
+    function stopOnNonFeedPage() {
+        if (observer) {
+            observer.disconnect();
+            observer = null;
         }
 
-        if (!document.getElementById(TOOLBAR_ID)) createToolbar();
-        if (changed) updateCounts();
-    });
+        activePosts.forEach((_nsfw, post) => post.classList.remove('rfo-hidden'));
+        activePosts.clear();
+        resetCounts();
 
-    initialize();
+        document.getElementById(TOOLBAR_ID)?.remove();
+        document.getElementById(STYLE_ID)?.remove();
+        isRunning = false;
+    }
 
-    observer.observe(document.body, {
-        childList: true,
-        subtree: true
-    });
+    function startOnFeedPage() {
+        if (!isFeedPage()) {
+            stopOnNonFeedPage();
+            return;
+        }
 
-    window.addEventListener('popstate', () => {
-        createToolbar();
+        if (!isRunning) {
+            isRunning = true;
+            activeTab = CONFIG.defaultTab;
+            addStyles();
+            createToolbar();
+
+            observer = new MutationObserver(mutations => {
+                if (!isFeedPage()) {
+                    stopOnNonFeedPage();
+                    return;
+                }
+
+                let changed = false;
+
+                for (const mutation of mutations) {
+                    mutation.removedNodes.forEach(node => {
+                        collectPosts(node).forEach(post => {
+                            removePost(post);
+                            changed = true;
+                        });
+                    });
+
+                    mutation.addedNodes.forEach(node => {
+                        collectPosts(node).forEach(post => {
+                            addPost(post);
+                            changed = true;
+                        });
+                    });
+                }
+
+                if (!document.getElementById(TOOLBAR_ID)) createToolbar();
+                if (changed) updateCounts();
+            });
+
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+        } else {
+            createToolbar();
+        }
+
         collectPosts(document).forEach(addPost);
         updateAllVisibility();
         updateCounts();
-    });
+    }
+
+    // Reddit is a single-page app. Re-check the URL after client-side navigation.
+    function handleRouteChange() {
+        startOnFeedPage();
+    }
+
+    const originalPushState = history.pushState;
+    history.pushState = function (...args) {
+        const result = originalPushState.apply(this, args);
+        Promise.resolve().then(handleRouteChange);
+        return result;
+    };
+
+    const originalReplaceState = history.replaceState;
+    history.replaceState = function (...args) {
+        const result = originalReplaceState.apply(this, args);
+        Promise.resolve().then(handleRouteChange);
+        return result;
+    };
+
+    window.addEventListener('popstate', handleRouteChange);
+    window.addEventListener('hashchange', handleRouteChange);
+
+    startOnFeedPage();
 })();
