@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Reddit Feed Organizer - Lightweight
 // @namespace    https://github.com/Danikika94/reddit-feed-organizer
-// @version      1.1.4
+// @version      1.1.5
 // @description  Organize Reddit feed listings into All Posts, SFW and NSFW tabs. SFW is shown by default.
 // @author       Danikika94
 // @match        https://www.reddit.com/*
@@ -28,6 +28,7 @@
     let activeTab = CONFIG.defaultTab;
     let feedObserver = null;
     let pendingFeedObserver = null;
+    let currentFeedRoot = null;
     let isRunning = false;
     let lastRouteKey = getRouteKey();
 
@@ -276,7 +277,7 @@
         }
     }
 
-    function cleanupRuntime() {
+    function suspendRuntime() {
         if (feedObserver) {
             feedObserver.disconnect();
             feedObserver = null;
@@ -284,20 +285,41 @@
 
         disconnectPendingFeedObserver();
 
-        // Always restore posts before removing the filtering stylesheet.
+        // Remove the controls and stop observing immediately, but retain the
+        // already-applied SFW hiding classes and stylesheet during navigation.
+        // Reddit can keep the previous feed visible for a short transition;
+        // clearing these classes here would briefly reveal NSFW posts.
+        document.getElementById(TOOLBAR_ID)?.remove();
+        currentFeedRoot = null;
+        isRunning = false;
+    }
+
+    function clearSuspendedState() {
+        // Called only after the destination feed exists. Cleanup and applying
+        // the new feed's filter happen in one JS task, before the next paint.
         activePosts.forEach((_nsfw, post) => post.classList.remove('rfo-hidden'));
         activePosts.clear();
         resetCounts();
 
         document.getElementById(TOOLBAR_ID)?.remove();
         document.getElementById(STYLE_ID)?.remove();
-        isRunning = false;
     }
 
     function processMutations(mutations) {
         let changed = false;
+        const feed = currentFeedRoot;
+
+        if (!feed || !feed.isConnected) {
+            suspendRuntime();
+            waitForFeedAndStart();
+            return;
+        }
 
         for (const mutation of mutations) {
+            // Ignore post-detail content, recommendations and unrelated page
+            // mutations. Only process changes that occur inside the active feed.
+            if (mutation.target !== feed && !feed.contains(mutation.target)) continue;
+
             mutation.removedNodes.forEach(node => {
                 collectPosts(node).forEach(post => {
                     removePost(post);
@@ -323,6 +345,10 @@
         const feed = findFeedRoot();
         if (!feed) return false;
 
+        // Preserve the old filter until a destination feed is ready, then
+        // replace its state and apply SFW filtering without an unfiltered frame.
+        clearSuspendedState();
+        currentFeedRoot = feed;
         isRunning = true;
         activeTab = CONFIG.defaultTab;
         addStyles();
@@ -384,7 +410,7 @@
     }
 
     function handleRouteChange() {
-        cleanupRuntime();
+        suspendRuntime();
 
         if (isFeedPage()) {
             waitForFeedAndStart();

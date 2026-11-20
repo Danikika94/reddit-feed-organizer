@@ -2,6 +2,19 @@
 
 All notable project changes are documented here.
 
+## [1.1.5] - 2026-11-20
+
+### Fixed
+- Prevented NSFW posts from briefly reappearing while opening an individual post or navigating between Reddit feed routes.
+- The script now suspends feed processing and removes the toolbar without immediately clearing the active SFW hiding classes.
+- The previous filter state is cleared only after the destination feed is present; the new feed is filtered in the same JavaScript task before the browser can paint an unfiltered frame.
+- Restricted incremental post processing to mutations inside the active feed, avoiding unrelated post-detail and recommendation content.
+
+### Notes
+- Individual post pages remain excluded: no organizer toolbar or post-detail filtering is activated there.
+- SFW remains the default tab whenever a feed is initialized.
+- No external dependencies or Reddit API credentials required.
+
 ## [1.1.4] - 2026-11-20
 
 ### Fixed
